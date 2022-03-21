@@ -1,0 +1,1164 @@
+寄存器映射
+	寄存器映射就是对芯片里面的某一个具有特殊功能的内存单元取一个别名的的过程就叫做寄存器映射
+	例：
+		51里通过映射让PA口输出高电平
+			sfr PA0 = 0x80;
+			PA0 = 0xFF;
+		51里不通过寄存器映射让PA口输出高电平
+			*(unsigned char *)0x80 = 0xff;	//把0xff写入地址为0x80的寄存器中
+		STM32里通过寄存器映射让PF口输出高电平
+			#define GPIOF_ODR *(unsigned int *)0x40021414	//GPIOF寄存器的地址范围0x4002 1400 - 0x4002 17FF,起始地址+偏移地址 = 0x4002 1400 +0x14 =0x40021414
+			GPIOF_ODR = 0xffff;
+		STM32里不通过寄存器映射让PF口输出高电平
+			*(unsigned char *)0x40021414 = 0xffff;
+
+存储器映射
+	给存储器分配地址的过程叫存储器映射，再分配一个地址叫重映射
+
+C语言对寄存器的封装
+	#define GPIOI_BASE			(0x40022000)			//GPIOI的基地址
+	#define GPIOH_BASE			(0x40021C00)			//GPIOH的基地址
+	#define GPIOG_BASE			(0x40021800)			//GPIOG的基地址
+	#define GPIOF_BASE			(0x40021400)			//GPIOF的基地址
+	#define GPIOE_BASE			(0x40021000)			//GPIOE的基地址
+	#define GPIOD_BASE			(0x40020C00)			//GPIOD的基地址
+	#define GPIOC_BASE			(0x40020800)			//GPIOC的基地址
+	#define GPIOB_BASE			(0x40020400)			//GPIOB的基地址
+	#define GPIOA_BASE			(0x40020000)			//GPIOA的基地址
+	
+	typedef unsigned int uint32_t;
+	typedef unsigned short int uint16_t;
+	
+	typedef struct
+	{
+		uint32_t MODER;
+		uint32_t OTYPER;
+		uint32_t OSPEEDR;
+		uint32_t PUPDR;
+		uint32_t IDR;
+		uint32_t ODR;
+		uint16_t BSRRL;
+		uint16_t BSRRH;
+		uint32_t LCKR;
+		uint32_t AFR[2];
+	}GPIO_TypeDef;
+	
+	#define GPIOI 				(GPIO_TypeDef  *)GPIOI_BASE
+	#define GPIOH 				(GPIO_TypeDef  *)GPIOH_BASE
+	#define GPIOG 				(GPIO_TypeDef  *)GPIOG_BASE
+	#define GPIOF 				(GPIO_TypeDef  *)GPIOF_BASE
+	#define GPIOE 				(GPIO_TypeDef  *)GPIOE_BASE
+	#define GPIOD 				(GPIO_TypeDef  *)GPIOD_BASE
+	#define GPIOC 				(GPIO_TypeDef  *)GPIOC_BASE
+	#define GPIOB 				(GPIO_TypeDef  *)GPIOB_BASE
+	#define GPIOA 				(GPIO_TypeDef  *)GPIOA_BASE
+	
+	GPIOF->ODR = 0xFFFF;
+
+
+GPIO工作方式
+	4种输入模式：
+		输入浮空：输出不起作用，无配置上下拉
+		输入上拉：输 出不起作用，配置上拉
+		输入下拉：输出不起作用，配置下拉
+		模拟输入：输出不起作用，无配置上下拉，关闭施密特触发器
+	4种输出模式：
+		开漏输出（带上拉或者下拉）：可以输出强高低电平，连接数字器件
+		开漏复用功能（带上拉或者下拉）
+		推挽式输出（带上拉或者下拉）：只可以输出强低电平，高电平得靠外部电阻拉高
+		推挽式复用功能（带上拉或者下拉）
+	4种最大输出速度：
+		2MHz
+		25MHz
+		50MHz
+		100MHz
+
+GPIO相关配置寄存器
+	每组GPIO端口的寄存器包括：
+		4个32位配置寄存器：
+			一个端口模式寄存器（GPIOx_MODER）
+			一个端口输出类型寄存器（GPIOx_OTYPER）
+			一个端口输出速度寄存器（GPIOx_OSPEEDR）
+			一个端口上拉下拉寄存器（GPIOx_PUPDR）
+		2个32位数据寄存器
+			一个端口输入数据寄存器（GPIOx_IDR）
+			一个端口输出数据寄存器（GPIOx_ODR）
+		一个端口置位/复位寄存器（GPIOx_BSRR）
+		一个端口配置锁存寄存器（GPIOx_LCKR）
+		两个复位功能寄存器（低位GPIOx_AFRL_&GPIOx_AFRH）
+	*如果配置一个IO口需要2个位，那么刚好32位寄存器配置一组IO口16个IO口
+	*如果配置一个IO口只需要1个位，一般高16位保留
+	*BSRR寄存器32位分为低16位BSRRL和高16位BSRRH，BSRRL配置一组IO口的16个IO口的置为状态（1），BSRRH配置复位状态（0）。
+
+STM32引脚说明
+	*所有IO口都可以作为中断输入
+	
+GPIO库函数介绍
+	GPIO_Init函数初始化样例：
+		GPIO_InitTypeDef GPIO_InitStructure;
+		RCC_AJB1PeriphClockCmd(RCC_AHB1Periph_GPIOF,ENABLE);//使能GPIOF时钟
+		//GPIOF9,F10初始化设置
+		GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9|GPIO_Pin_10;//LED0和LED1对应IO口
+		GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;//普通输出模式
+		GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;//推挽输出
+		GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;//100MHz
+		GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;//上拉
+		GPIO_Init(GPIOF,&GPIO_InitStructure);//初始化GPIOF9,F10
+		//*可以一次初始化一个IO组下的多个IO，前提是这些IO口的配置方式一样
+	2个读取输入电平函数
+		uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef* GPIOx,uint16_t GPIO_Pin);
+			作用：读取某个GPIO的输入电平。实际操作的是GPIOx_IDR寄存器
+			例如：GPIO_ReadInputDataBit(GPIOA,GPIO_Pin_5);//读取GPIOA.5的输入电平
+		
+		uint16_t GPIO_ReadInputData(GPIO_TypeDef* GPIOx);
+			作用：读取某组GPIO的输入电平。实际操作的是GPIOx_IDR寄存器
+			例如：GPIO_ReadInputData(GPIOA);//读取GPIOA组中所有io口输入电平
+	4个设置输出电平函数:
+		void GPIO_SetBits(GPIO_TypeDef* GPIOx,uint16_t GPIO_Pin);
+			作用：设置某个IO口输出为高电平(1).实际操作BSRRL寄存器
+		void GPIO ReseBits(GPIO_TypeDef* GPIOx,uint16_t GPIO_Pin);
+			作用：设置某个IO口输出为低电平(0).实际操作BSRRL寄存器。
+		void GPIO_WriteBit(GPIO_TypeDef* GPIOx,uint16_t GPIO_Pin,BitAction BitVal);
+		void GPIO_Write(GPIO_TypeDef* GPIOx,uint16_t PortVal);
+			作用：这两个函数不常用，也是用来设置IO口输出电平。
+
+跑马灯
+	通过库函数实现：
+		使能IO口时钟。调用函数RCC_AHB1PeriphClockCmd();
+			不同的外设调用的时钟使能函数可能不一样
+		初始化IO口模式。调用函数GPIO_Init();
+		操作IO口，输出高低电平。
+			GPIO_SetBits();
+			GPIO_ResetBits();
+	通过寄存器实现：
+		使能IO口时钟。配置相关寄存器RCC->AHB1ENR
+		初始化IO口模式。配置四个配置寄存器GPIOx_MODER/GPIOx_OTYPER/GPIOx_OSPEEDR/GPIOx_PUPDR
+		操作IO口，输出高低电平。配置寄存器GPIOX_ODR或者BSRRL/BSRRH。
+
+按键实验
+	调用库函数：
+		uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef* GPIOx,uint16_t GPIO_Pin);
+	操作寄存器：
+		GPIOx_IDR:端口输入寄存器
+	使用位带操作读取IO口输入电平方法：
+		PEin(4)		-读取GPIOE.4口电平
+		PEin(n)		-读取GPIOE.n口电平
+
+
+MDK中寄存器地址名称映射分析
+	51中映射方法：
+		sfr P0 = 0x80;//P0映射到地址0x80
+		P0 = 0x00;//往寄存器地址赋值0x00
+		
+	STM32中操作:
+		GPIOA->ODR = 0x00000000;
+		
+							——————————————
+			外设基地址->	|			 |		外设基地址
+							|			 |
+							|			 |
+			AHB1	  ->	|			 |		AHB1外设基地址是根据外设基地址加上偏移
+							|			 |
+							|			 |
+			GPIOA     ->	|			 |		GPIOA的基地址是挂载的总线的基地址加上偏移地址
+							|			 |
+							|			 |
+							|			 |
+							|			 |
+							|			 |
+							——————————————
+							
+			实际上每个外设都有一个基地址(起始地址)
+			例如GPIOA，GPIOA里所有的寄存器都是连续存储在以GPIO基地址为起始地址的连续存储区域
+			
+			#define PERIPH_BASE			((uint32_t)0x40000000)			//定义了一个外设基地址(赋值一个常量)
+			
+			#define AHB1PERIPH_BASE		(PERIPH_BASE+0x00020000)		//定义了一个AHB1外设的基地址(由外设基地址加上一个常量)
+			
+			#define GPIOA_BASE			(AHB1PERIPH_BASE + 0x0000)		//定义了一个GPIOA基地址(AHB1外设地址加上一个常量)
+			
+			#define GPIOA				((GPIO_TypeDef*)GPIOA_BASE)		//定义了一个GPIOA结构体
+			
+			typedef struct
+			{
+				__IO uint32_t MODER;    /*!< GPIO port mode register,               地址偏移量: 0x00      */
+				__IO uint32_t OTYPER;   /*!< GPIO port output type register,        地址偏移量: 0x04      */
+				__IO uint32_t OSPEEDR;  /*!< GPIO port output speed register,       地址偏移量: 0x08      */
+				__IO uint32_t PUPDR;    /*!< GPIO port pull-up/pull-down register,  地址偏移量: 0x0C      */
+				__IO uint32_t IDR;      /*!< GPIO port input data register,         地址偏移量: 0x10      */
+				__IO uint32_t ODR;      /*!< GPIO port output data register,        地址偏移量: 0x14      */
+				__IO uint16_t BSRRL;    /*!< GPIO port bit set/reset low register,  地址偏移量: 0x18      */
+				__IO uint16_t BSRRH;    /*!< GPIO port bit set/reset high register, 地址偏移量: 0x1A      */
+				__IO uint32_t LCKR;     /*!< GPIO port configuration lock register, 地址偏移量: 0x1C      */
+				__IO uint32_t AFR[2];   /*!< GPIO alternate function registers,     地址偏移量: 0x20-0x24 */
+			} GPIO_TypeDef;
+			
+			
+时钟系统
+	STM32有5个时钟源：HSI、HSE、LSI、LSE、PLL：
+		LSI：低速内部时钟
+			RC振荡器，精度不高
+			频率为32KHz
+			提供低功耗时钟
+			主要是给独立看门狗和自动唤醒单元使用   
+		LSE：低速外部时钟
+			接频率为32.768KHz的石英晶体
+			RTC
+		HSI：高速内部时钟
+			RC震荡器，精度不高
+			频率为16MHz
+			可直接作为系统时钟或者用作PLL时钟输入
+		HSE：高速外部时钟
+			可接石英/陶瓷谐振器，或者接外部时钟源
+			频率范围为4MHz~26MHz
+		PLL：锁相环倍频输出。STM32F4有两个PLL
+			主PLL(PLL)由HSE或者HSI提供时钟信号，并具有两个不同的输出时钟
+				第一个输出PLLP用于生成高速的系统时钟(168MHz)
+				第二个输出PLLQ用于生成USB OTG FS的时钟(48MHz),随机数发生器的时钟和SDIO时钟
+			专用PLL(PLLI2S)用于生成精确时钟，从而在I2S接口实现高品质音频性能
+	系统时钟SYSCLK可来源于三个时钟源
+		HSI振荡器时钟
+		HSE振荡器时钟
+		PLL时钟
+	时钟信号输出MCO1(PA8)和MCO2(PC9)
+		MCO1:用户可以配置预分频器(1~5)向MCO1引脚输出4个不同的时钟源:
+			HIS
+			LSE
+			HSE
+			PLL
+		MCO2:用户可以配置预分频器(1~5)向MCO2引脚PC9输出4个不同的时钟源:
+			HSE
+			PLL
+			SYSCLK
+			PLLI2S
+		MCO最大输出时钟不超过100MHz
+	任何一个外设在使用之前，必须首先使能其相应的时钟
+	RCC相关配置寄存器:
+		typedef struct
+		{
+			__IO uint32_t CR;            /*!< RCC clock control register,                                  Address offset: 0x00 */
+			__IO uint32_t PLLCFGR;       /*!< RCC PLL configuration register,                              Address offset: 0x04 */
+			__IO uint32_t CFGR;          /*!< RCC clock configuration register,                            Address offset: 0x08 */
+			__IO uint32_t CIR;           /*!< RCC clock interrupt register,                                Address offset: 0x0C */
+			__IO uint32_t AHB1RSTR;      /*!< RCC AHB1 peripheral reset register,                          Address offset: 0x10 */
+			__IO uint32_t AHB2RSTR;      /*!< RCC AHB2 peripheral reset register,                          Address offset: 0x14 */
+			__IO uint32_t AHB3RSTR;      /*!< RCC AHB3 peripheral reset register,                          Address offset: 0x18 */
+			uint32_t      RESERVED0;     /*!< Reserved, 0x1C                                                                    */
+			__IO uint32_t APB1RSTR;      /*!< RCC APB1 peripheral reset register,                          Address offset: 0x20 */
+			__IO uint32_t APB2RSTR;      /*!< RCC APB2 peripheral reset register,                          Address offset: 0x24 */
+			uint32_t      RESERVED1[2];  /*!< Reserved, 0x28-0x2C                                                               */
+			__IO uint32_t AHB1ENR;       /*!< RCC AHB1 peripheral clock register,                          Address offset: 0x30 */
+			__IO uint32_t AHB2ENR;       /*!< RCC AHB2 peripheral clock register,                          Address offset: 0x34 */
+			__IO uint32_t AHB3ENR;       /*!< RCC AHB3 peripheral clock register,                          Address offset: 0x38 */
+			uint32_t      RESERVED2;     /*!< Reserved, 0x3C                                                                    */
+			__IO uint32_t APB1ENR;       /*!< RCC APB1 peripheral clock enable register,                   Address offset: 0x40 */
+			__IO uint32_t APB2ENR;       /*!< RCC APB2 peripheral clock enable register,                   Address offset: 0x44 */
+			uint32_t      RESERVED3[2];  /*!< Reserved, 0x48-0x4C                                                               */
+			__IO uint32_t AHB1LPENR;     /*!< RCC AHB1 peripheral clock enable in low power mode register, Address offset: 0x50 */
+			__IO uint32_t AHB2LPENR;     /*!< RCC AHB2 peripheral clock enable in low power mode register, Address offset: 0x54 */
+			__IO uint32_t AHB3LPENR;     /*!< RCC AHB3 peripheral clock enable in low power mode register, Address offset: 0x58 */
+			uint32_t      RESERVED4;     /*!< Reserved, 0x5C                                                                    */
+			__IO uint32_t APB1LPENR;     /*!< RCC APB1 peripheral clock enable in low power mode register, Address offset: 0x60 */
+			__IO uint32_t APB2LPENR;     /*!< RCC APB2 peripheral clock enable in low power mode register, Address offset: 0x64 */
+			uint32_t      RESERVED5[2];  /*!< Reserved, 0x68-0x6C                                                               */
+			__IO uint32_t BDCR;          /*!< RCC Backup domain control register,                          Address offset: 0x70 */
+			__IO uint32_t CSR;           /*!< RCC clock control & status register,                         Address offset: 0x74 */
+			uint32_t      RESERVED6[2];  /*!< Reserved, 0x78-0x7C                                                               */
+			__IO uint32_t SSCGR;         /*!< RCC spread spectrum clock generation register,               Address offset: 0x80 */
+			__IO uint32_t PLLI2SCFGR;    /*!< RCC PLLI2S configuration register,                           Address offset: 0x84 */
+			__IO uint32_t PLLSAICFGR;    /*!< RCC PLLSAI configuration register,                           Address offset: 0x88 */
+			__IO uint32_t DCKCFGR;       /*!< RCC Dedicated Clocks configuration register,                 Address offset: 0x8C */
+	
+		} RCC_TypeDef;
+	RCC相关头文件和固件库源文件
+		头文件：stm32f4xx_rcc.h
+		源文件：stm32f4xx_rcc.h
+		1.时钟使能配置
+			RCC_HSICmd,RCC_LSICmd,RCC_PLLCmd,RCC_PLL2SCmd,
+			RCC_PLLSAICmd,RCC_RTCCLKCmd,RCC_AHBxPeriphClockCmd,
+			RCC_APBxPeriphClockCmd
+		2.时钟源和时钟相关配置
+			RCC_HSEConfig,RCC_LSEConfig,RCC_PLLConfig,RCC_PLLI2SConfig,
+			RCC_PLLSAIConfig,RCC_MCO1Config,RCC_MCO2Config,
+			RCC_SYSCLKConfig,RCC_HCLKConfig,RCC_PCLK1Config,
+			RCC_PCLK2Config,RCC_RTCCLKConfig,RCC_I2SCLKConfig
+		3.外设复位函数
+			RCC_AHB1PeriphResetCmd,RCC_AHB2PeriphResetCmd,
+			RCC_AHB3PeriphResetCmd,RCC_APB1PeriphResetCmd,
+			RCC_APB2PeriphResetCmd
+		6.状态参数获取参数：
+			RCC_GetSYSCLKSource,RCC_GetClocksFreq,RCC_GetFlagStatus,
+			RCC_Clearflg
+		7.RCC中断相关函数
+			RCC_ITConfig,RCC_ClearITPendingBit,RCC_GetITStatus
+		
+
+Systick定时器
+	Systick定时器是一个简单的定时器，对于CM3，CM4内核芯片，都有Systick
+	
+	Systick定时器常用来做延时，或者实时系统的心跳时钟。这样可以节省MCU资源，不浪费一个定时器。
+	比如UCOS中，分时复用，需要一个最小的时间戳，一般在STM32+UCOS系统中，都采用Systick做UCOS心跳时钟
+
+	Systick定时器就是系统滴答定时器，一个24位的倒计数定时器，记到0时，将从RELOAD寄存器中自动重装
+	载定时初值。只要不把它在Systick控制及状态寄存器中的使能位清除，就永不停息，即使在睡眠模式下也
+	能工作
+	
+	Systick定时器被捆绑在NVIC中，用于产生SYSTICK异常(异常号:15)
+	
+	Systick中断的优先级也可以设置
+	
+	拥有4个Systick寄存器
+		CTRL			SysTick控制和状态寄存器			
+		LOAD SysTick	自动重装载除值寄存器
+		VAL				SysTick当前值寄存器				
+		CALIB SysTick	校准值寄存器
+	
+		SysTick控制和状态寄存器-CTRL
+			位段		名称				类型		复位值			描述
+			16			COUNTFLAG			R			0			如果在上次读取本寄存器后，SysTick已经数到了0，则该位为1.如果读取该位，该位将自动清零
+			2			CLKSOURCE			R/W			0			0=外部时钟源(STCLK)		1=内核时钟(FCLK)
+			1			TICKINT				R/W			0			1=SysTick倒数到0时产生SysTick异常请求	0=数到0时无动作
+			0			ENABLE				R/W			0			SysTick定时器的使能位
+			对于STM32，外部时钟源是HCLK(AHB总线时钟)的1/8内核时钟是HCLK时钟
+			配置函数：SysTick_CLKSourceConfig();
+		SysTick重装载数值寄存器-LOAD
+			位段		名称				类型		复位值			描述
+			23:0		RELOAD				R/W			0				当倒数至零时，将被重装载的值
+		SysTick当前值寄存器-VAL
+			位段		名称				类型		复位值			描述
+			23:0		CURRENT				R/W			0				读取时返回当前倒计数的值，写它则使之清零，同时还会清除在SysTick控制及状态寄存器中的COUNTFLAG标志
+		
+	固件库中的Systick相关函数：
+		SysTick_CLKSourceConfig()			//Systick时钟源选择		misc.c文件中
+		SysTick_Config(uint32_t ticks)		//初始化systick，时钟为HCLK，并开启中断
+											//core_cm3.h/core_cm4.h文件中
+		
+	函数解读:
+		首先如果使用外部时钟源HSE,要配置外部晶振频率:
+			stm32f4xx.h
+			#if !defined (HSE_VALUE)
+			#define HSE_VALUE ((uint32_t)8000000)
+			#endif
+		初始化之前首先通过宏定义定义下面变量来定义系统时钟频率:
+			#define PLL_M	8
+			#define PLL_Q	7
+			#define PLL_N	336
+			#define PLL_P	2
+			PLL = 8MHz * N / (M * P) = 8MHz * 336 / (8 * 2) = 168Mhz
+		初始化之后的状态:
+			SYSCLK(系统时钟)						=168MHz
+			AHB总线时钟(HCLK = SYSCLK)				=168MHz
+			APB1总线时钟(PCLK1 = SYSCLK / 4)		=42MHz
+			APB2总线时钟(PCLK2 = SYSCLK / 2)		=84MHz
+			PLL主时钟								=168MHz
+		初始化之后可以通过变量SystemCoreClock获取系统变量.
+		如果SYSCLK = 168MHz,那么变量
+		SystemCoreClock = 168000000.
+		
+	用中断方式实现delay延时
+		static __IO uint32_t TimingDelay;
+		void Delay(__IO uint32_t nTime)
+		{
+			TimingDelay = nTime;
+			while(TimingDelay != 0);
+		}
+		void SysTick_Handler(void)
+		{
+			if(TimingDelay != 0x00)
+			{
+				TimingDelay--;
+			}
+		}
+		int main(void)
+		{
+			if(SysTick Config(SystemCoreClock / 1000))//systick时钟为HCLK,中断时间间隔1ms
+			{
+				while(1);
+			}
+			while(1)
+			{
+				Delay(200);//200ms
+			}
+		}
+
+调试
+	JTAG/SWD调试原理
+		STM32F4xx的内核时Cortex - M4F,该内核包含用于高级调试功能的硬件.利用这些调试功能,可以在取指
+		(指令断点)或取访问数据(数据断点)时停止内核.内核停止时,可以查询内核的内部状态和系统的外部状态.
+		查询完成后,将恢复内核和系统并恢复程序执行.当调试器与STM32F4xx MCU相连并进行调试时,将使用内核的硬件调试模块
+	提供两个调试接口:
+		串行接口(SW_DP)
+			提供用于连接到AHP-AP端口的2引脚(时钟+数据)接口
+		JTAG调试接口(JTAG-DP)
+			提供用于连接到AHP-AP端口的5引脚标准JTAG接口
+		
+	SWJ调试端口引脚
+		SWJ-DP 引脚名称			JTAG调试端口						SW调试端口							引脚分配
+							类型			说明				类型		调试分配						
+		JTMS/SWDIO			I			JTAG测试模式选择		IO		串行线数据输入/输出				PA13
+		JTCK/SWCLK			I			JTAG测试时钟			I		串行线时钟						PA14
+		JTDI				I			JTAG测试数据输入		-		-								PA15
+		JTDO/TRACESWO		O			JTAG测试数据输出		-		TRACESWO(如果使能异步跟踪)		PB3
+		NJTRST				I			JTAG测试nReset			-		-								PB4
+	
+	单片机复位后默认是JTAG引脚
+	
+	JTAG/SWD模式设置方法
+	(在文件stm32f4xx_gpio.c中):
+		void GPIO_PinADConfig(GPIO_TypeDef* GPIOx,uint16_tGPIO_PinSource,uint8_t GPIO_AF);
+		默认复位状态,这些引脚都是JTAG/SWD调试功能开启.
+		如果需要关闭,只需要相应的IO口设置为相应模式.
+		
+IO引脚复用和映射
+	什么是端口复用
+		STM32有很多的内置外设,这些外设的外部引脚都是与GPIO复用的.也就是说,一个GPIO如果可以复用为内置外设的功能引脚,
+		那么当这个GPIO作为内置外设使用的时候,就叫做复用
+		
+		例如串口1的发送接收引脚是PA9,PA10,当我们把PA9,PA10不用做GPIO,而用作复位功能串口1的发送接收引脚的时候,叫做端口复用
+	
+	STM32F4的端口复用映射原理
+		STM32F4系列微控制器IO引脚通过一个复用器连接到内置外设或模块.该复用器一次只允许一个外设的复位功能(AF)连接到对应的IO
+		口.这样可以确保共用同一个IO引脚的外设之间不会发送冲突.
+	
+		每个IO引脚都有一个复用器,该复用器采用16路复用功能输入(AD0到AF15),可通过GPIOx_AFRL(针对引脚0-7)和GPIOx_AFRH(针对引脚8-15)
+		寄存器对这些输入进行配置,每四位控制一路复用
+	
+	复用功能映射配置
+		1.系统功能
+			将I/O连接到AF0,然后根据所用功能进行配置:
+				-JTAG/SWD:在各器件复位后,会将这些引脚指定为专用引脚,可供片上调试模块立即使用(不受GPIO控制器)
+				-RTC_REFIN:此引脚应配置为输入浮空模式
+				-MCO1和MCO2:这些引脚必须配置为复用功能模式.
+		2.GPIO
+			在GPIOx_MODER寄存器中将所需I/O配置为输入或输出
+		3.外设复用功能
+			对于ADC和DAC,在GPIOx_MODER寄存器中将所需I/O配置为模拟通道.对于其它外设
+				-在GPIOx_MODER寄存器中将所需I/O配置为复用功能.
+				-通过GPIOx_OTYPER,GPIOx_PUPDR和GPIOx_OSPEEDER寄存器,分别选择类型,上拉/下拉以及输出速度
+				-在GPIOx_AFRL或GPIOx_AFRH寄存器中,将I/O连接到所需AFx
+		端口复用为复用功能配置过程
+			以PA9,PA10配置为串口1为例
+			1.GPIO端口时钟使能.
+				RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA,ENABLE);
+			2.复用外设时钟使能.
+				因为要将端口PA9,PA10复用为串口,所以要使能串口时钟
+				RCC_AHB2PeriphClockCmd(RCC_APB2Periph_USART1,ENABLE);
+			3.端口模式配置为复用功能. GPIO_Init()函数.
+				GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;//复用功能
+			4.配置GPIOx_AFRL或者GPIOx_AFRH寄存器,将IO连接到所需的AFx.
+				/*PA9连接AF7,复用为USART1_TX*/
+				GPIO_PinAFConfig(GPIOA,GPIO_PinSource9,GPIO_AF_USART1);
+				/*PA10连接AF7,复用为USART1_RX*/
+				GPIO_PinAFConfig(GPIOA,GPIO_PinSource10,GPIO_AF_USART1);
+			PA9,PA10复用为串口1的配置过程
+				RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA,ENABLE);//使能GPIOA时钟
+				RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1,ENABLE);//使能USART1时钟
+				//USART1端口配置
+				GPIO_InitStructure.GPIO_Pin=GPIO_Pin_10;//GPIOA9与GPIOA10
+				GPIO_InitStructure.GPIO_Mode=GPIO_Mode_AF;//复用功能
+				GPIO_InitStructure.GPIO_Speed=GPIO_Speed_50MHz;//速度50MHz
+				GPIO_InitStructure.GPIO_OType=GPIO_OType_PP;//推挽复用输出
+				GPIO_InitStructure.GPIO_PuPd=GPIO_PuPd_UP;//上拉
+				GPIO_Init(GPIOA,&GPIO_InitStructure);//初始化PA9,PA10
+				//串口1对应引脚复用映射
+				GPIO_PinAFConfig(GPIOA,GPIO_PinSource9,GPIO_AF_USART1);//GPIO9复用为USART1
+				GPIO_PinAFConfig(GPIOA,GPIO_PinSource10,GPIO_AF_USART1);//GPIO10复用为USART1
+	
+	
+NVIC中断优先级分组
+	CM4内核支持256个中断,其中包含了16个内核中断和240个外部中断,并且具有256级的可编程中断设置.
+	STM32F4并没有使用CM4内核的全部顶下,而是只用了它的一部分
+		-STM32F4xx/STM32F41xx总共有92个中断.
+		-STM32F42xx/STM32F43xx则总共有96个中断
+	STM32F40xx/STM32F41xx的92个中断里面,包括10个内核中断和82个可屏蔽中断,具有16级可编程的中断优先级,而我们常用的就是这82个可屏蔽中断
+	中断管理方法:
+		首先,对STM32中断进行分组,组0~4.同时,对每个中断设置一个抢占优先级和一个响应优先级值.
+		分组配置是在寄存器SCB->AIRCR中配置:
+			组			AIRCR[10:8]			IP bit[7:4]分配情况			分配结果
+			0			111					0:4							0位抢占优先级,4位响应优先级
+			1			110					1:3							1位抢占优先级,3位响应优先级
+			2			101					2:2							2位抢占优先级,2位响应优先级
+			3			100					3:1							3位抢占优先级,1位响应优先级
+			4			011					4:0							4位抢占优先级,0位响应优先级
+		抢占优先级&响应优先级区别:
+			-高优先级的抢占优先级是可以打断正在进行的低抢占优先级中断的
+			-抢占优先级相同的中断,高响应优先级不可以打断低响应优先级的中断
+			-抢占优先级相同的中断,当两个中断同时发生的情况下,哪个响应优先级高,哪个先执行.
+			-如果两个中断的抢占优先级和响应优先级都是一样的话,则看哪个中断先发生就先执行;
+		举例:
+			-假定设置中断优先级组为2,然后设置
+			中断3(RTC中断)的抢占优先级为2,响应优先级为1.
+			中断6(外部中断0)的抢占优先级为3,响应优先级为0.
+			中断7(外部中断1)的抢占优先级为2,响应优先级为0.
+			那么这3个中断的优先级顺序为:中断7>中断3>中断6
+		注意:
+			一般情况下,系统代码执行过程中,只设置一次中断优先级分组,比如分组2,设置好分组之后一般不会再改变分组.随意改变分组会导致中断管理混乱,程序出现意想不到的执行结果.
+	中断优先级分组函数:
+		
+		在misc.c文件中有这么一个函数:void NVIC_PrirityGroupConfig(uint32_t NVIC_PriorityGroup);//设置系统中断优先级分组的程序,一般只调用一次
+		
+		
+		void NVIC_PrirityGroupConfig(uint32_t NVIC_PriorityGroup);
+		{
+			assert_param(IS_NVIC_PRIORITY_GROUP(NVIC_PriorityGroup));
+			SCB->AIRCR = AIRCR_VECTKEY_MASK | NVIC_PriorityGroup;//SCB->AIRCR寄存器,用于分组
+		}
+		
+		NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);//分组为2
+
+
+中断优先级设置
+	MDK中NVIC寄存器结构体
+		core_cm4.h文件中
+		typedef struct
+		{
+			__IO uint32_t ISER[8];                 //中断使能寄存器组
+				uint32_t RESERVED0[24];
+			__IO uint32_t ICER[8];                 //中断失能寄存器组
+				uint32_t RSERVED1[24];
+			__IO uint32_t ISPR[8];                 //中断挂起寄存器组
+				uint32_t RESERVED2[24];
+			__IO uint32_t ICPR[8];                 //中断解挂寄存器组
+				uint32_t RESERVED3[24];
+			__IO uint32_t IABR[8];                 //中断激活标志位寄存器组
+				uint32_t RESERVED4[56];
+			__IO uint8_t  IP[240];                 //中断优先级控制的寄存器组,CM4内核支持240个外部中断
+				uint32_t RESERVED5[644];
+			__O  uint32_t STIR;                    /*!< Offset: 0xE00 ( /W)  Software Trigger Interrupt Register     */
+		}  NVIC_Type;
+	对于每个中断设置优先级
+		中断优先级控制的寄存器组:IP[240]
+			全称是:Interrupt Priority Registers
+			
+			240个8位寄存器,每个中断使用一个寄存器来确定优先级.
+			STM32F40x系列一共82个可屏蔽中断,使用IP[81]~IP[0].
+			
+			每个IP寄存器的高4位用来设置抢占和响应优先级(根据分组),低4位没有用到.
+			
+			void NVIC_Init(NVIC_InitTypeDef* NVIC_InitStruct);
+		中断使能寄存器组:ISER[8]
+			作用:用来使能中断
+			32位寄存器,每个位控制一个中断的使能.STM32F40x只有82个可屏蔽中断,所以只使用了其中的ISER[0]~ISER[2].
+			
+			ISER[0]的bit0~bit31分别对应中断0~31.ISER[1]的bit0~31对应中断32~63;ISER[2]的bit0~17对应中断64~81;
+			
+			void NVIC_Init(NVIC_IniTypeDef* NVIC_InitStruct);
+		中断失能寄存器组:ICER[8]
+			作用:用来失能中断
+			32位寄存器,每个位控制一个中断的失能.STM32F40x只有82个可屏蔽中断,所以只使用了其中的ICER[0]和ICER[1].
+			
+			ICER[0]的bit0~bit31分别对应中断0~31.ICER[1]的bit0~27对应中断32~63;ICER[2]的bit0~17对应中断64~82;
+			
+			配置方法和ISER一样
+			
+			void NVIC_Init(NVIC_InitTypeDef* NVIC_InitStruct);
+		中断挂起控制寄存器组:ISPR[8]
+			作用:用来挂起中断
+		中断解挂控制寄存器组:ICPR[8]
+			作用:用来解挂中断
+		
+			core_cm4.h文件中
+			__STATIC_INLINE void NVIC_SetPendingIRQ(IRQn_Type IRQn)
+			__STATIC_INLINE uint32_t NVIC_GetPendingIRQ(IRQn_Type IRQn)
+			__STATIC_INLINE void NVIC_ClearPendingIRQ(IRQn_Type IRQn);
+		中断激活标志位寄存器组:IABR[8]
+			作用:只读,通过它可以知道当前在执行的中断是哪一个,如果对应为1,说明该中断正在执行.
+			
+			core_cm4.h文件中
+			__STATIC_INLINE uint32_t NVIC_GetActive(IRQn_Type IRQn)
+	
+	
+	中断参数初始化函数
+		void NVIC Init(NVIC_InitTypeDef* NVIC_InitStruct);
+		
+		
+		在misc.h文件中
+		typedef struct
+		{
+			uint8_t NVIC_IRQChannel;//确定是哪一个中断
+
+			uint8_t NVIC_IRQChannelPreemptionPriority;//设置抢占优先级
+
+			uint8_t NVIC_IRQChannelSubPriority;//设置响应优先级
+
+			FunctionalState NVIC_IRQChannelCmd;//使能通道
+		}NVIC_InitTypeDef;
+		
+		NVIC_InitTypeDef NVIC_InitStructure;//定义结构体变量
+		
+		NVIC_InitStructure.NVIC_IRQChannel |= USART1_IRQn;//串口1中断
+		NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;//抢占优先级为1
+		NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;//响应优先级位2
+		NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;//IRQ通道使能
+		NVIC_Init(&NVIC_InitStructure);//根据上面指定的参数初始化NVIC寄存器
+	
+	中断优先级设置步骤
+		1.系统运行后先设置中断优先级分组.调用函数:
+			void NVIC_PriorityGroupConfig(uint32_t NVIC_PriorityGroup);
+			整个系统执行过程中,只设置一次中断分组
+		2.针对每个中断,设置对应的抢占优先级和响应优先级:
+			void NVIC_Init(NVIC_InitTypeDef* NVIC_InitStruct);
+		3.如果需要挂起/解挂,查看中断当前激活状态,分别调用相关函数即可.
+		
+		
+串行通信		
+	处理器与外部设备通信的两种方式:
+		并行通信
+			-传输原理:数据各个位同时传输.
+			-优点:速度快
+			-缺点:占用引脚资源多
+		串行通信
+			-传输原理:数据按位顺序传输
+			-优点:占用引脚资源少
+			-缺点:速度相对较慢
+	
+	串口通信:
+		按照数据传送方向,分为:
+			单工:
+				数据传输只支持数据在一个方向上传输
+			半双工:
+				允许数据在两个方向上传输,但是,在某一时刻,只允许数据在一个方向上传输,它实际上是一种切换方向的单工通信;
+			全双工:
+				允许数据同时在两个方向上传输,因此,全双工通信是两个单工通信方式的结合,它要求发送设备和接收设备都有独立的接收和发送能力
+		按照通信方式,分为:
+			同步通信:带时钟同步信号传输.
+				-SPI,IIC通信接口
+			异步通信:不带时钟同步信号.
+				-UART(通用异步收发器),单总线
+	
+	常见的串行通信接口:	
+		通信标准						引脚说明															通信方式					通信方向
+		
+		UART(通用异步收发器)			TXD:发送端;RXD:接收端;GND:供地										异步通信					全双工
+		单总线(1-wire)					DQ:发送/接收端														异步通信					半双工
+		SPI								SCK:同步时钟;MISO主机输入,从机输出;MOSI:主机输出,从机输入			异步通信					全双工
+		I2C								SCL:同步时钟;SDA:数据输入/输出端									异步通信					半双工
+	
+	STM32的串口通信接口
+		-UART:通用异步收发器
+		-USART:通用同步异步收发器
+		
+		STM32F4xx目前最多支持8个UART,STM32F407一般是6个.具体可以对照选型手册和数据手册来看.
+		STM32F103目前最多支持5个UART
+		
+		UART异步通信引脚连接方法:
+			-RXD:数据输入引脚.数据接收.
+			-TXD:数据发送引脚,数据发送.
+			
+			若是芯片和电脑通信,则需要在它们之间接一个RS232转换器,上位机发送的数据被RS232芯片转换为232电平,芯片发送的是TTL电平,不可以直接和232电平通信,所以也被转换为232电平
+				-TTL一般是从单片机或者芯片中发出的电平，高电平为5V（51单片机）或者3.3V（stm32）
+				-RS232采用负逻辑,-15v ~ -3v 代表 1,+3v ~ +15v 代表 0,
+		
+		STM32F407ZGT6有6个串口
+			串口号		RXD						TXD
+			1			PA10(PB7)				PA9(PB6)
+			2			PA3(PD6)				PA2(PD5)
+			3			PB11(PC11/PD9)			PB10(PC10/PD8)
+			4			PC11(PA1)				PC10(PA0)
+			5			PD2						PC12
+			6			PC7(PG9)				PC6(PG14)
+			STM32F407ZGT6的芯片数据手册中芯片引脚功能中可以查看到
+	
+		UART异步通信方式特点:
+			-全双工异步通信
+			-小数波特率发生器系统,提供精确的波特率
+			-可配置的16倍过采样或8倍过采样,因而为速度容差与时钟容差的灵活配置提供了可能.
+			-可编程的数据字长度(8位或者9位);
+			-可配置的停止位(支持1或者2位停止位).
+			-可配置的使用DMA多缓冲器通信.
+			-单独的发送器和接收器使能位.
+			-检测标准:1.接收缓冲器2.发送缓冲器3.传输结束标志
+			-多个带标志的中断源.触发中断.
+			-其他:校验控制,四个错误检测标志
+		
+		STM32串口异步通信需要定义的参数:
+			1.起始位
+			2.数据位(8位或者9位)
+			3.奇偶校验位(第9位)
+			4.停止位(1,15,2位)
+			5.波特率设置
+			
+	常用的串口相关寄存器
+		-USART_SR状态寄存器
+			FlagStatus USART_GetFlagStatus(USART_TypeDef* USARTx, uint16_t USART_FLAG);//stm32f4xx_usart.c
+		-USART_DR数据寄存器
+			void USART_SendData(USART_TypeDef* USARTx, uint16_t Data);		//发送数据
+			uint16_t USART_ReceiveData(USART_TypeDef* USARTx);				//接收数据		stm32f4xx_usart.c
+		-USART_BRR波特率寄存器
+			void USART_Init(USART_TypeDef* USARTx, USART_InitTypeDef* USART_InitStruct);	//波特率
+	
+	串口配置的一般步骤
+		1.时钟使能
+			串口时钟使能:
+				RCC_APBxPeriphClockCmd();
+			GPIO时钟使能:
+				RCC_AHB1PeriphClockCmd();
+		2.引脚复用映射
+			GPIO_PinAFConfig();
+		3.GPIO端口模式设置:
+			GPIO_Init();模式设置为GPIO_Mode_AF
+		4.串口参数初始化:
+			USART_Init();
+		5.开启中断并且初始化NVIC(如果需要开启中断才需要这个步骤)
+			NVIC_Init();
+			USART_ITConfig();
+		6.使能串口:
+			USART_Cmd();
+		7.编写中断处理函数:
+			USARTx_IRQHandler();
+		8.串口数据收发:
+			void USART_SendData();//发送数据到串口,DR
+			uint16_t USART_ReceiveData();//接收数据,从DR读取接收到的数据
+		9.串口传输状态获取:
+			FlagStatus USART_GetFlagStatus();
+			void USART_ClearITPendingBit();
+	
+	接收缓冲:
+		#define USART_REC_LEN 200			//定义最大接收字节数200
+		
+		u8 USART_RX_BUF[USART_REC_LEN];		//接收缓冲,最大USART_REC_LEN个字节,末字节为换行符
+		
+		u16 USART_RX_STA;					//接收状态标记
+			bit15				bit14				bit13~0
+			接收完成标志位		接收到0x0D标志		接收到的有效数据个数
+	
+
+外部中断
+	概述:
+		STM32F4的每一个IO都可以作为外部中断输入.
+		STM32F4的中断控制器支持22个外部中断/事件请求:
+			EXTI线0~15:对应外部IO口的输入中断.
+			EXTI线16:连接到PVD输出.
+			EXTI线17:连接到RTC闹钟事件
+			EXTI线18:连接到USB OTG FS唤醒事件
+			EXTI线19:连接到以太网唤醒事件
+			EXTI线20:连接到USB OTG HS(在FS中配置)唤醒事件
+			EXTI线21:连接到RTC入侵和时间戳事件
+			EXTI线22:连接到RTC唤醒事件.
+			
+		每个外部中断线可以独立的配置触发方式(上升沿,下降沿或者双边沿触发),触发/屏蔽,专用的状态位.
+		
+		STM32F4供IO使用的中断线只有16个,但是STM32F4xx系列的IO口多达上百个,STM32F407ZGT6有112个IO口,16(个)*7(组),映射方式如下:
+			GPIOx.0映射到EXTI0
+			GPIOx.1映射到EXTI1
+			GPIOx.2映射到EXTI2
+			GPIOx.3映射到EXTI3
+			.
+			.
+			.
+			GPIOx.15映射到EXTI15
+			
+		虽然STM32F4有16个中断线,但是IO口外部中断在中断向量表中只分配了7个中断向量,也就是只能使用7个中断服务函数
+		
+			位置			优先级			优先级类型				名称				说明					地址
+			6				13				可设置					EXTI0				EXTI线0中断				0x000_0058		
+			7				14				可设置					EXTI1				EXTI线1中断				0x000_005c		
+			8				15				可设置					EXTI2				EXTI线2中断				0x000_0060		
+			9				16				可设置					EXTI3				EXTI线3中断				0x000_0068		
+			10				17				可设置					EXTI4				EXTI线4中断				0x000_006c		
+			23				30				可设置					EXTI5_9				EXTI线[5:9]中断			0x000_009c		
+			40				47				可设置					EXTI010_15			EXTI线[10:15]中断		0x000_00e0
+			从表中可以看出,外部中断线5~9分配一个中断向量,共用一个服务函数,外部中断线10~15分配一个中断向量,共用一个中断服务函数.
+			
+		中断服务函数列表:
+			EXTI0_IRQHandler
+			EXTI1_IRQHandler
+			EXTI2_IRQHandler
+			EXTI3_IRQHandler
+			EXTI4_IRQHandler
+			EXTI5_9_IRQHandler
+			EXTI10_15_IRQHandler
+	
+	常用库函数
+		1.void SYSCFG_EXTILineConfig(uint8_t EXTI_PortSourceGPIOx, uint8_t EXTI_PinSourcex);
+			//设置IO口与中断线的映射关系
+			exp:SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOE,EXTI_PinSource2);//区别M3
+		
+		2.void EXTI_Init(EXTI_InitTypeDef* EXTI_InitStruct);
+			//初始化中断线:触发方式等
+		
+		3.ITStatus EXTI_GetITStatus(uint32_t EXTI_Line);			
+			//清除中断线中断状态,是否发生
+		
+		4.void EXTI_ClearITPendingBit(uint32_t EXTI_Line);		
+			//清除中断线上的中断标志位
+		
+		5.RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG,ENABLE);
+			//使能SYSCFG时钟
+			//这个函数非常重要,在使用外部中断时一定要先使能SYSCFG时钟
+	
+	一般配置步骤:
+		1.使能SYSCFG时钟
+			RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG,ENABLE);
+		2.初始化IO口为输入
+			GPIO_Init();
+		3.设置IO口与中断线的映射关系.
+			void SySCFG_EXTILineConfig();
+		4.初始化线上中断,设置触发条件等
+			EXTI_Init();
+		5.配置中断分组(NVIC),并使能中断.
+			NVIC_Init();
+		6.编写服务函数.
+			EXTIx_IRQHandler();
+		7.清除中断标志位
+			EXTI_ClearITPendingBit();
+			
+			
+看门狗
+	概述:
+		STM32内置两个看门狗,提供了更高的安全性,事件的精确性和使用的灵活性.两个看门狗设备(独立看门狗/窗口看门狗)可以用来检测和解决由软件错误引起的故障.当计数器
+		达到给定的超时值时,触发一个中断(仅适用于窗口看门狗)或者产生系统复位
+		
+		独立看门狗:
+		
+			由专用的低速时钟(LSI)驱动,即使主时钟发生故障它仍有效.
+			
+			独立看门狗适用于需要看门狗作为一个在主程序之外能够完全独立工作,并且对时间精度要求低的场合
+		
+		窗口看门狗:
+		
+			由从APB1时钟分频后得到时钟驱动.通过可配置的时间窗口来检测应用程序非正常的过迟或过早操作
+		
+			窗口看门狗最适合要求看门狗在精确计时窗口起作用的程序.
+	
+	独立看门狗功能描述
+		-在键值寄存器(IWDG_KR)中写入0xcccc,开始启用独立看门狗,此时计数器开始从其复位值0xfff递减,当计数器值计数到尾值0x000时会产生一个复位信号(IWDG_KR).
+		-无论何时,只要在键值寄存器IWDG_KR中写入0xAAAA(通常说的喂狗),自动重装载寄存器IWDG_RLR的值就会重新加载到计数器,从而避免看门狗复位.
+		-如果程序异常,就无法正常喂狗,从而系统复位
+	
+	独立看门狗寄存器
+		键值寄存器IWDG_KR:
+			0~15位有效
+			写0xCCCC启动
+			写0xAAAA重装载
+		预分频寄存器IWDG_PR:
+			0~2位有效
+			给时钟分频
+			具有写保护功能,要操作先取消写保护
+		重装载寄存器IWDG_RLR:
+			0~11位有效.
+			重装载的值
+			具有写保护功能,要操作先取消写保护
+		状态寄存器IWDG_SR:
+			0~1位有效
+			获取看门狗的状态
+			
+		注意:
+			键寄存器写入0x5555表示允许访问IWDG_PR和IWDG_RLR寄存器.
+			写入0xcccc,启动看门狗工作(若选择了硬件看门狗则不受此命令字限制)
+			软件必须以一定的间隔写入0xAAAA,否则,当计数器为0时,看门狗会产生复位
+	
+	独立看门狗IWDG操作库函数
+		void IWDG_WriteAccessCmd(uint16_t IWDG_WriteAccess);//取消写保护:0x5555使能
+		void IWDG_SetPrescaler(uint8_t IWDG_Prescaler);//设置预分频系数:写PR
+		void IWDG_SetReload(uint16_t Reload);//设置重装载值:写PLR
+		void IWDG_Re;oadCounter(void);//喂狗:写0xAAAA到KR
+		void IWDG_Enable(void);//使能看门狗:写oxCCCC到KR
+		FlagStatus IWDG_GetFlagStatus(uint16_t IWDG_FLAG);//状态:重装载/预分频更新
+	
+	独立看门狗操作步骤
+		1.取消寄存器写保护:
+			IWDG_WriteAccessCmd();
+		2.设置独立看门狗的预分频系数,确定时钟:
+			IWDG_SetPrescaler();
+		3.设置看门狗重装载值,确定溢出时间:
+			IWDG_SetReload();
+		4.使能看门狗
+			IWDG_Enable();
+		5.应用程序喂狗:
+			IWDG_ReloadCounter();
+			
+		溢出时间计算:
+			Tout = ((4 * 2^prer) * rlr) / 32 (M4)
+	
+	窗口看门狗概述
+		之所以称为窗口就是因为其喂狗时间是一个有上下限的范围内(窗口),你可以通过设定相关寄存器,设定其上限时间(下限固定).喂狗的时间不能过早也不能过晚.
+		而独立看门狗限制喂狗时间在0-x内,x由相关寄存器决定.喂狗的时间不能过晚.
+		
+	为什么要窗口看门狗:
+		对于一般的看门狗,程序可以在它产生复位前的任意时刻刷新看门狗,但这有一个隐患,有可能程序跑乱了又跑回到正常的地方,或者跑乱的程序正好执行了刷新看门狗操作,这样的情况下一般看门狗就检测不出来了
+		如果使用窗口看门狗,程序员可以根据程序正常执行的时间设置刷新看门狗的一个时间窗口,保证不会提前刷新看门狗也不会滞后刷新看门狗,这样可以检测出程序没有安装正常的路径运行非正常的跳过了某些程序段的情况		
+	
+	窗口看门狗工作过程
+		STM32F的窗口看门狗中有一个7位的递减计数器T[6:0],它会出现下述2种情况之一是产生看门狗复位:
+			1.当喂狗的时候如果计数器的值大于某一设定值W[6:0]时,此设定数值在WWDG_CFR寄存器定义.
+			2.当计数器的数值从0x40减到0x3f时[T6位跳变到0]
+			如果启动了看门狗并且允许中断,当递减计数器等于0x40时产生早期唤醒中断(EWI),它可以用于喂狗以避免WWDG复位
+	
+	窗口看门狗超时时间
+		公式:
+			Twwdg = (4096 * 2^WDGTB * (T[5:0] + 1)) / Fpelk1;
+			其中:
+				Twwdg:WWDG超时时间(单位为ms)
+				Fpclk1:APB1的时钟频率(单位KHz)
+				WDGTB:WWDG的预分频系数
+				T[5:0]:窗口看门狗的计数器低6位
+			根据上面的公式,假设Fpclk1 = 42MHz,那么可以得到最小-最大超时时间如下
+				WDGTB 			最小超时(us) T[5:0] = 0x00			最大超时(ms) T[5:0] = 0x3f
+				0				97.52								6.24
+				1				195.05								12.48
+				2				390.10								24.97
+				3				780.19								49.93
+			
+	窗口看门狗注意事项
+		1.上窗口值W[6:0]必须大于下窗口值0x40.否则就无窗口了.
+		2.窗口看门狗时钟来源PCLK1(APB1总线时钟)分频后.
+		
+	窗口看门狗配置过程
+		1.使能看门狗时钟
+			RCC_APB1PeriphClockCmd();
+		2.设置分频系数
+			WWDG_SetPrescaler();
+		3.设置上窗口值
+			WWDG_SetWindowValue();
+		4.开启提前唤醒中断并分组(可选)
+			WWDG_EnablelT();
+			NVIC_Init();
+		5.使能看门狗
+			WWDG_Enable();
+		6.喂狗
+			WWDG_SetCounter();
+		7.编写中断服务函数
+			WWDG_IRQHandler();
+	
+	
+STM32定时器
+	STM32F40x系列总共最多有14个定时器,STM32F407ZG有12个16位定时器和两个32位定时器
+	STM32定时器分为3类:高级定时器,通用定时器,基本定时器,区别:
+		
+		定时器种类				位数			计数器模式				产生DMA请求			捕获/比较通道			互补输出		特殊应用场景
+		高级定时器(TIM1,TIM8)	16				向上,向下	向上/下		可以				4						有				带可编程死区的互补输出
+		通用定时器(TIM2,TIM5)	32				向上,向下	向上/下		可以				4						无				通用.定时计数,PWM输出,输入捕获,输出比较			
+		通用定时器(TIM3,TIM4)	16				向上,向下	向上/下		可以				4						无				通用.定时计数,PWM输出,输入捕获,输出比较	
+		通用定时器(TIM9~TIM14)	16				向上					没有				2						无				通用.定时计数,PWM输出,输入捕获,输出比较	
+		基本定时器(TIM6,TIM7)	16				向上,向下	向上/下		可以				0						无				主要应用于驱动DAC
+	
+	
+	STM3F4的通用TIMx(TIM2\TIM3\TIM4和TIM5)定时器功能特点包括:
+		-16/32位向上\向下\ 向上/下(中心对齐)计数模式,自动装载计数器(TIMx_CNT).
+		-16位可编程(可以实时修改)预分频器(TIMx_PSC),计数器时钟频率的分频系数为1~65535之间的任意数值.
+		-4个独立通道(TIMxCH1~4),这些通道可以用来作为:
+			1.输入捕获
+			2.输出比较
+			3.PWM生成(边缘或中间对齐模式)
+			4.单脉冲模式输出
+		-可使用外部信号(TIMx_ETR)控制定时器和定时器互连(可以用1个定时器控制另一个定时器)的同步电路.
+		-如下事件发生产生中断/DMA(6个独立的IRQ/DMA请求生成器):(TIM9~TIM14无法产生DMA请求)
+			1.更新:计数器向上溢出/向下溢出,计数器初始化(通过软件或者内部/外部触发)
+			2.触发事件(计数器启动\停止\初始化或者内部/外部触发计数)
+			3.输入捕获
+			4.输出比较
+			5.支持针对定位的增量(正交)编码器和霍尔传感器电路
+			6.触发输入作为外部时钟或者按周期的电流管理
+		-STM32的通用定时器可以被用于:测量输入信号的脉冲长度(输入捕获)或者产生输出波形(输出比较和PWM)等.
+		-使用定时器预分频器和RCC时钟控制器预分频器,脉冲长度和波形周期可以在几个微秒到几个毫秒间调整.STM32的每个通用定时器都是完全独立的,没有互相更新的任何资源
+		
+	通用定时器:
+		计数器模式
+			通用定时器可以向上计数\向下计数\向上向下双向计数模式.
+				1.向上计数模式:
+					计数器从0计数到自动加载值(TIMx_ARR),然后重新从0开始计数并且产生一个计数器溢出事件.
+				2.向下计数模式:
+					计数器从自动装入的值(TIMx_ARR)开始向下计数到0,然后从自动装入的值重新开始,并产生一个计数器向下溢出事件.
+				3.中央对齐模式(向上/向下计数):
+					计数器从0开始计数到自动装入的值-1,产生一个计数器溢出事件,然后向下计数到1并产生一个计数器溢出事件;然后再从0开始重新计数.
+			
+			时钟的选择(8种)
+				内部RCC提供的时钟:TIMxCLK
+				内部触发输入口1~4:
+					ITR1/ITR2/ITR3/ITR4
+					用于一个定时器作为另一定时器的分频器
+				外部捕捉比较引脚
+					引脚1:TI1FP1或TI1F_ED
+					引脚2:TI2FP2
+				外部引脚:ETR
+					使能/禁止位
+					可编程设定极性
+					4位外部触发过滤器
+					外部触发分频器:
+						分频器关闭
+						二分频
+						四分频
+						八分频
+			
+			常用库函数：stm32f4xx_tim.c/.h
+				-定时器参数初始化
+					void TimeBaselnit(TIM_TypeDef* TIMx,TIM_TimeBaseInitTypeDef* TIM_TimeBaseInitStruct);
+					
+					typedef struct
+					{
+						uint16_t TIM_Prescaler;
+						uint16_t TIM_CounterMode;
+						uint32_t TIM_Period;
+						uint16_t TIM_ClockDivision;
+						uint8_t TIM_RepetitionCounter;
+					} TIM_TimeBaseInitTypeDef; 
+		
+					TIM_InitStruct.TIM_Period = 4999;
+					TIM_InitStruct.TIM_Prescaler = 7199;
+					TIM_InitStruct.TIM_ClockDivision = TIM_CKD_DIV1;
+					TIM_InitStruct.TIM_CounterMode = TIM——CounterMode_Up;
+					TIM_TimeBaseInit(TIM3,&TIM_TimeBaseStructure);
+	
+				-定时器使能函数：
+					void TIM_Cmd(TIM_TypeDef* TIMx,FunctionalState NewState);
+					
+				-定时器中断使能函数：
+					void TIM_ITConfig(TIM_TypeDef* TIMx,uint16_t TIM_IT,FunctionalState NewState);
+					
+				-状态标志位获取和清除
+					FlagDtatus TIM_GetFlagStatus(TIM_TypeDef* TIMx,uint16_t TIM_FLAG);
+					void TIM_ClearFlag(TIM_TypeDef* TIMx,uint16_t TIM_FLAG);
+					ITStatus TIM_GetITstatus(TIM_TypeDef* TIMx,uint16_t TIM_IT);
+					void TIM_ClearITPendingBit(TIM_TypeDef* TIMx,uint16_t TIM_IT);
+			
+			Tout(溢出时间) = (ARR+1)(PSC+1)/Tclk
+			
+			定时器中断实现步骤
+				1.使能定时器时钟
+					RCC_APB1PeriphClockCmd();
+				2.初始化定时器。配置ARR，PSC
+					TIM_TimeBaseInit();
+				3.开启定时器中断，配置NVIC。
+					NVIC_Init();
+				4.使能定时器
+					TIM_Cmd();
+				5.编写中断服务函数
+					TIMx_IRQHandler();
+				
+				Tout(溢出时间) = (ARR + 1)(PSC + 1) / Tclk
+				
+				
+PWM
+	-PWM输出库函数
+		void TIM_OCxInit(TIM_TypeDef* TIMx,TIM_OCInitTypeDef* TIM_OCInitStruct);
+	
+			typedef struct
+			{
+			  uint16_t TIM_OCMode;     			//PWM模式1或者模式2  
+			  uint16_t TIM_OutputState;   		//输出使能OR失能
+			  uint16_t TIM_OutputNState;  
+			  uint32_t TIM_Pulse;        		//比较值
+			  uint16_t TIM_OCPolarity;    		//比较输出极性
+			  uint16_t TIM_OCNPolarity;   
+			  uint16_t TIM_OCIdleState;  
+			  uint16_t TIM_OCNIdleState;
+			} TIM_OCInitTypeDef;
+			
+			TIM_OCInitStruct.TIM_OCMode = TIM_OCMode_PWM2;//PWM模式2
+			TIM_OCInitStruct.TIM_OutputState = TIM_OutputState_Enable;//比较输出使能
+			TIM_OCInitStruct.TIM_TIM_Pulse = 100；
+			TIM_OCInitStruct.TIM__OCPolarity = TIM_OCPolarity_High;//输出极性比较极性高
+			TIM_OC2Init(TIM3,&TIM_OCInitStructure);//根据指定的参数初始化外设TIM3 OC2
+	-设置比较值函数：
+		void TIM_SetCompareX(TIM_TypeDef* TIMx,uint16_t Comparex);
+	-使能输出比较预装载：
+		void TIM_OCxPreloadConfig(TIM_TypeDef* TIMx,uint16_t TIM_OCPreload);
+	-使能自动重预装载寄存器运行位：
+		void TIM_ARRPreloadConfig(TIM_TypeDef* TIMx,FunctionalState NewState);
+		
+	-PWM输出配置步骤：
+		1.使能定时器14和相关IO口时钟。
+			使能定时器14时钟:RCC_APB1PeriphClockCmd();
+			使能GPIOG时钟:RCC_AHB1PeriphClockCmd();
+		2.初始化IO口为复用功能输出。函数：GPIO_Init();
+			GPIO_InitStructure.GPIO_Mode=GPIO+Mode_AF;//复用功能
+		3.GPIOF9复用映射到定时器14
+			GPIO_PinAFConfig(GPIOF,GPIO_PinSource9,GPIO_AF_TIM14);
+		4.初始化定时器:ARR,PSC等：TIM_TimeBaseInit();
+		5.初始化输出比较参数:TIM_OC1Init();
+		6.使能预装载寄存器:TIM_OC1PreloadConfig(TIM14,TIM_OCPreload_Enable);
+		7.使能定时器：TIM_ARRPreloadConfig(TIM14,ENABLE);
+		8.不断改变比较值CCRx，达到不同的占空比效果：TIM_SetCompare1();
+	
+	-输入捕获通道初始化函数：
+		void TIM_ICInit(TIM_TypeDef* TIMx,TIM_ICInitTypeDef* TIM_ICInitStruct);
+	-通道极性设置独立函数：
+		void TIM_OCxPolarityConfig(TIM_TypeDef* TIMx,uint16_t TIM_OCPolarity);
+	-获取通道捕获值
+		uint32_t TIM_GetCapture1(TIM_TypeDef* TIMx);
+		
+	-输入捕获的一般配置步骤：
+		1.初始化定时器和通道对应IO的时钟。
+		2.初始化IO口，模式为复用：GPIO——Init();
+			GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+		3.设置引脚复用映射：
+			GPIO_PinAFConfig();
+		4.初始化定时器ARR,PSC
+			TIM_TimeBaseInit();
+		5.初始化输入捕获通道
+			TIM_ICInit();
+		6.如果要开启捕获中断
+			TIM_ITConfig();
+			NVIC_Init();
+		7.使能定时器:
+			TIM_Cmd();
+		8.编写中断服务函数
+			TIMx_IRQHandler();
+			
+
+TFLCD驱动
+	指令：
+		0xD3:
+			改指令为读ID指令，用于读取LCD控制器的ID.因此,同一个代码,可以根据ID的不同,执行不同的LCD驱动初始化,以兼容不同的LCD屏幕
+		0x36:
+			该指令为存储访问控制指令，可以控制ILI9314存储器的读写方向，简单的说，就是在连续写GRAM的时候，可以控制GRAM指针的增长方向，从而控制显示方式（读GEAM也是一样）
+		0x2A:
+			该指令是列地址设置指令，在从左到右，从上到下的扫描方式（默认），该指令用于设置横坐标（X坐标）
+			在默认扫描方式时，该指令用于设置x坐标，该指令带有4个参数，实际上是2个坐标值：SC和EC，即列地址的起始值和结束值，SC必须小于EC，且0<=SC/EC<=239.
+			一般在设置x坐标的时候，我们只需要带2个参数即可，也就是设置SC即可，因为如果EC没有变化，我们只需要设置一次即可（在初始化ILI9341的时候设置），从而提高速度
+		0x2B:
+			该指令是页地址设置指令，在从左到右，从上到下的扫描方式（默认）下面，该指令用于设置纵坐标（Y坐标）
+			在扫描方式时，该指令用于设置Y坐标，该指令带有4个参数，实际上是2个坐标值：SP和EP，即页地址的起始值和结束值，SP必须小于EP，且0<=SP/EP<=319.
+			一般在设置Y坐标的时候，我们只需要带2个参数即可，也就是设置SP即可，因为如果EP没有变化，我们只需要设置一次即可（在初始化ILI9341的时候设置），从而提高速度。
+		0x2C:
+			该指令是写GRAM指令，在发送该指令后，我们便可以往LCD的GRAM里面写入颜色数据了。该指令支持连续写（地址自动递增）
+			在收到指令0x2C之后，数据有效位宽变为16位，我们可以连续写入LCD GRAM值，而GRAM的地址将根据MY/MX/MV设置的扫描方向进行自增。
+			例如：
+				假设设置的是从左到右，从上到下的扫描方式，那么设置好起始坐标（通过SC，SP设置）后，每写入一个颜色值，GRAM地址将会自动自增1（SC++），如果碰到EC，则回到SC，
+				同时SP++，一直到坐标：EC，EP结束，其间无需再次设置的坐标，从而大大提高写入速度
+		0x2E:
+			该指令是读GRAM指令，用于读取ILI9341的显存（GRAM），同0x2C指令，该指令支持连续读（地址自动递增）
+			ILI9314在收到该指令后，第一次输出的是dummy数据（无效），第二次开始，读取到的才是有效的GRAM数据（从坐标：SC，SP开始），输出规律为：
+			每个颜色分量占8个位，一次输出2个颜色分量。比如：第一次输出是R1G1，随后的规律为：B1R2->G2B2->R3G3->B3R4->G4B4->R5G5...	以此类推
+	
+
+FSMC
+	简介：
+		STM32的FSMC支持8/16/32位数据宽度，我们这里用到的LCD是16位宽度的，所以在设置的时候选择16位位宽就OK了。FSMC的外部设备地址映像，STM32的FSMC将外部存储器划分为固定大小为256M字节的四个存储块
+	存储块1：
+		STM32的FSMC存储块1（Bank1）用于驱动NOR FLASH/SRAM/PSRAM，被分为4个区，每个区管理64M字节空间，每个区都有独立的寄存器对所连接的存储器进行配置。Bank1的256M字节空间由28根地址线（HADDR[27:0]）寻址。
+		这里HADDR，是内部AHB地址总线，其中，HADDR[25:0]来自外部存储器地址FSMC_A[25:0]，而HADDR[26:27]对4个区进行寻址。如下表所示：
+		
+			Bank1所选区				片选信号					地址范围							HADDR
+																									[27:26]			[25:0]
+			第1区					FSMC_NE1					0x6000 0000 ~ 63FF FFFF				00				FSMC_A[25:0]
+			第2区					FSMC_NE2					0x6400 0000 ~ 67FF FFFF				01				FSMC_A[25:0]
+			第3区					FSMC_NE3					0x6800 0000 ~ 6BFF FFFF				10				FSMC_A[25:0]
+			第4区					FSMC_NE4					0x6C00 0000 ~ 6FFF FFFF				11				FSMC_A[25:0]
+		
+		当Bank1接的是16位宽度存储器的时候:HADDR[25:1] -> FSMC_A[24:0]
+		当Bank1接的是8位宽度存储器的时候：HADDR[25:0] -> FSMC_A[25:0]
+		不论外部接8位/16位宽设备,FSMC_A[0]永远接在外部设备地址A[0]
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
